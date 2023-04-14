@@ -33,7 +33,17 @@ sub run {
         $n_passed_rules = 209;
         $n_failed_rules = 5;
     }
-    # Exclusion for ARM platform
+
+    if (is_ppc64le) {
+        $n_passed_rules = 211;
+        $n_failed_rules = 4;
+        @eval_match = (
+            'content_rule_partition_for_var_log_audit',
+            'content_rule_smartcard_pam_enabled',
+            'content_rule_grub2_uefi_password',
+            'content_rule_no_files_unowned_by_user');
+    }
+
     if (is_aarch64 or is_arm) {
         @eval_match = (
             'content_rule_is_fips_mode_enabled',
