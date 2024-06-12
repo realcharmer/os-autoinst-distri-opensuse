@@ -26,6 +26,7 @@ use testapi;
 use serial_terminal 'select_serial_terminal';
 use strict;
 use warnings;
+use version_utils 'is_sle';
 
 sub run {
     select_serial_terminal;
@@ -60,7 +61,10 @@ sub run {
         my $algo = ($openssl_version >= "1.1") ? "sha256" : "dss1";
 
         assert_script_run "openssl dgst -$algo -sign $dsa_prikey $file_dgt > $file_sig";
-        validate_script_output "openssl dgst -$algo -verify $dsa_pubkey -signature $file_sig $file_dgt", sub { m/Verified OK/ };
+
+        # The output should fail on SP6+ because DSA is not allowed
+        validate_script_output "openssl dgst -$algo -verify $dsa_pubkey -signature $file_sig $file_dgt",
+            sub { is_sle("15-SP6+") ? m/Could not read public key/ : m/Verified OK/ };
 
         # Clean up temp files
         script_run "rm -f $file_dgt $file_sig dsaparam.pem";
