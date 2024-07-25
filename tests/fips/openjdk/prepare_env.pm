@@ -27,12 +27,7 @@ sub run {
     ];
 
     select_console "root-console";
-    zypper_call("in mozilla-nss-tools git-core");
-
-    if (script_run("test -d /etc/pki/nssdb") != 0) {
-        assert_script_run("mkdir /etc/pki/nssdb");
-        script_run_interactive("certutil -d /etc/pki/nssdb -N", $interactive_str, 30);
-    }
+    zypper_call("in mozilla-nss-tools mozilla-nss-sysinit git-core");
 }
 
 sub test_flags {
