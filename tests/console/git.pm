@@ -27,6 +27,9 @@ sub run {
     my $email = "you\@example.com";
     select_serial_terminal;
 
+    # Import public key to known_hosts
+    assert_script_run("ssh-keyscan -H localhost >> ~/.ssh/known_hosts");
+
     # Create a test repo
     zypper_call("in git-core");
     assert_script_run("mkdir -p repos/qa1;cd repos/qa1");
