@@ -35,8 +35,11 @@ sub run {
     zypper_call('in mariadb');
     mutex_wait('MARIADB_SERVER_READY');
 
-    # Run MySQL tests
+    # Run tests
+    record_info("Run MariaDB tests");
     perform_mariadb_test($server_ip, $password);
+    record_info("Run InnoDB encryption tests");
+    perform_innodb_encryption_test($server_ip, $password);
 
     # Delete the ip that we added if arch is s390x
     assert_script_run("ip addr del $client_ip/24 dev $netdev") if (is_s390x);
@@ -47,7 +50,7 @@ sub perform_mariadb_test {
 
     # Test server connection
     assert_script_run("ping -c 3 $server_ip");
-    validate_script_output("mysql --ssl -h $server_ip -u root -p$password -e \"show databases;\";", sub { m/Database/ });
+    validate_script_output("mysql --ssl -h $server_ip -u root -p$password -e \"SHOW DATABASES;\";", sub { m/Database/ });
 
     # Validate SSL connection
     validate_script_output("mysql --ssl -h $server_ip -u root -p$password -e \"SHOW STATUS LIKE 'Ssl_cipher';\";", sub { not m/DISABLED/ });
@@ -71,6 +74,29 @@ sub perform_mariadb_test {
         SELECT * FROM test_db.test_table;
         \";", sub { m/1\s+test_value/ }
     );
+}
+
+sub perform_innodb_encryption_test {
+    my ($server_ip, $password) = @_;
+
+    # Create new database
+    assert_script_run("mysql --ssl -h $server_ip -u root -p$password -e \"
+        CREATE DATABASE test_encrypted_db;
+    \"");
+
+    # Create encrypted tablespace
+    assert_script_run("mysql --ssl -h $server_ip -u root -p$password -e \"
+        CREATE TABLE test_encrypted_db.test_encrypted_table
+        (id int PRIMARY KEY, str varchar(50))
+        ENCRYPTED=YES ENCRYPTION_KEY_ID=100;
+    \"");
+
+    # Read data from tablespace
+    validate_script_output("mysql --ssl -h $server_ip -u root -p$password -e \"
+        SELECT NAME, ENCRYPTION_SCHEME, CURRENT_KEY_ID
+        FROM information_schema.INNODB_TABLESPACES_ENCRYPTION
+        WHERE NAME='test_encrypted_db/test_encrypted_db';
+    \";", sub { m/test_encrypted_table\s+1\s+100/ });
 }
 
 1;
