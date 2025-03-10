@@ -87,6 +87,7 @@ sub run {
     assert_script_run 'touch /srv/www/vhosts/dummy-host.example.com/listed_test_file';
 
     # Change SELinux policy for port 85, poo#178240
+    zypper_call 'in policycoreutils-python-utils' if is_jeos;
     assert_script_run 'semanage port -a -t http_port_t -p tcp 85' if has_selinux;
 
     # Create separate vhost for 'localhost'
