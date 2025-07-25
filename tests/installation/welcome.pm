@@ -244,4 +244,15 @@ sub run {
     }
 }
 
+sub post_fail_hook {
+    my ($self) = @_;
+    send_key 'ctrl-alt-f9';
+    wait_still_screen 4;
+    assert_script_run("rpm -qa > sut_packages.txt");
+    my $fname = upload_logs("sut_packages.txt");
+    path("ulogs/$fname")->move_to("sut_packages.txt");
+    assert_script_run 'save_y2logs';
+    upload_logs("/tmp/yast*");
+}
+
 1;
