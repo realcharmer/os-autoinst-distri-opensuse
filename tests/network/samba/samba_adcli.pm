@@ -111,20 +111,23 @@ sub update_password {
     # Restore the password with --add-samba-data as requested by poo#91950
     script_retry("adcli update --verbose --computer-password-lifetime=0 --domain '$AD_domain' --add-samba-data", retry => 3, delay => 60, fail_message => "Error re-adding password with samba data");
 
-    # wbinfo -t gives "failed to call wbcCheckTrustCredentials: WBC_ERR_AUTH_ERROR" in FIPS mode, see bsc#1249042
-    if (get_var('FIPS_ENABLED')) {
-        record_soft_failure("bsc#1249042 - winbind issue in FIPS mode");
-        return;
-    }
-
     # Check the trust secret for the domain
-    if (script_run("wbinfo -tP") != 0) {
-        my $output = script_output('wbinfo -tP', proceed_on_failure => 1);
+    if (is_sle("15+")) {
+        assert_script_run("adcli testjoin");
+    } else {
+        # wbinfo -t gives "failed to call wbcCheckTrustCredentials: WBC_ERR_AUTH_ERROR" in FIPS mode, see bsc#1249042
+        if (get_var('FIPS_ENABLED')) {
+            record_soft_failure("bsc#1249042 - winbind issue in FIPS mode");
+            return;
+        }
+        if (script_run("wbinfo -tP") != 0) {
+            my $output = script_output('wbinfo -tP', proceed_on_failure => 1);
 
-        # Check for bsc#1188575
-        if ($output =~ "WBC_ERR_AUTH_ERROR") {
-            die("wbinfo output failed") unless (is_sle('=12-SP3') || is_sle('=12-SP4'));
-            record_soft_failure("bsc#1188575");
+            # Check for bsc#1188575
+            if ($output =~ "WBC_ERR_AUTH_ERROR") {
+                die("wbinfo output failed") unless (is_sle('=12-SP3') || is_sle('=12-SP4'));
+                record_soft_failure("bsc#1188575");
+            }
         }
     }
 }
