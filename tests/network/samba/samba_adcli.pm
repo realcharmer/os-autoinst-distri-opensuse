@@ -15,7 +15,7 @@ use serial_terminal 'select_serial_terminal';
 use utils;
 use version_utils 'is_sle';
 use Utils::Architectures;
-use mm_network qw(is_networkmanager);
+use mm_network 'is_networkmanager';
 
 ## Fail fast when required variables are not present
 my $AD_hostname = get_required_var("AD_HOSTNAME");
@@ -37,7 +37,7 @@ sub get_supportserver_file {
 }
 
 sub samba_sssd_install {
-    zypper_call('in expect samba adcli samba-winbind krb5-client sssd-ad');
+    zypper_call('in expect samba adcli samba-winbind krb5-client sssd-ad sssd-tools sssd-dbus');
 
     # sssd versions prior to 1.14 don't support conf.d
     # https://github.com/SSSD/sssd/issues/3289
@@ -111,20 +111,35 @@ sub update_password {
     # Restore the password with --add-samba-data as requested by poo#91950
     script_retry("adcli update --verbose --computer-password-lifetime=0 --domain '$AD_domain' --add-samba-data", retry => 3, delay => 60, fail_message => "Error re-adding password with samba data");
 
-    # wbinfo -t gives "failed to call wbcCheckTrustCredentials: WBC_ERR_AUTH_ERROR" in FIPS mode, see bsc#1249042
-    if (get_var('FIPS_ENABLED')) {
-        record_soft_failure("bsc#1249042 - winbind issue in FIPS mode");
-        return;
-    }
-
-    # Check the trust secret for the domain
-    if (script_run("wbinfo -tP") != 0) {
-        my $output = script_output('wbinfo -tP', proceed_on_failure => 1);
-
-        # Check for bsc#1188575
-        if ($output =~ "WBC_ERR_AUTH_ERROR") {
-            die("wbinfo output failed") unless (is_sle('=12-SP3') || is_sle('=12-SP4'));
-            record_soft_failure("bsc#1188575");
+    if (is_sle('>=15')) {
+        # Using `sssctl`
+        # Check the trust secret for the domain
+        assert_script_run("sssctl domain-list");
+        #assert_script_run("sssctl domain-status $AD_domain");
+        # if (script_run("sssctl domain-status") != 0) {
+        #     if ($output =~ "WBC_ERR_AUTH_ERROR") {
+        #         ##
+        #         ## FIX THIS
+        #         ##
+        #         die("sssctl domain-status output failed");
+        #         record_soft_failure("bsc#1188575");
+        #     }
+        # }
+    } else {
+        # Using legacy `wbinfo`
+        # wbinfo -t gives "failed to call wbcCheckTrustCredentials: WBC_ERR_AUTH_ERROR" in FIPS mode, see bsc#1249042
+        if (get_var('FIPS_ENABLED')) {
+            record_soft_failure("bsc#1249042 - winbind issue in FIPS mode");
+            return;
+        }
+        # Check the trust secret for the domain
+        if (script_run("wbinfo -tP") != 0) {
+            my $output = script_output('wbinfo -tP', proceed_on_failure => 1);
+            # Check for bsc#1188575
+            if ($output =~ "WBC_ERR_AUTH_ERROR") {
+                die("wbinfo output failed") unless (is_sle('=12-SP3') || is_sle('=12-SP4'));
+                record_soft_failure("bsc#1188575");
+            }
         }
     }
 }
@@ -178,12 +193,19 @@ sub run {
     join_domain();
     $domain_joined = 1;
 
-    # Verify users and groups from AD via winbind.
-    # Note: The following checks are subject to sporadic failures (poo#96513)
-    record_soft_failure("poo#96513 - Failed to get AD domain") if (script_run("wbinfo -D $AD_domain", timeout => 120) != 0);
-    record_soft_failure("poo#96513 - Failed to get AD username") if (script_run("wbinfo -u | grep 'geekotest'", timeout => 120) != 0);
-    record_soft_failure("poo#96513 - Failed to get AD groups") if (script_run("wbinfo -g | grep 'openqa'", timeout => 120) != 0);
-    record_soft_failure("poo#96513 Failed to get AD user info for geekotest") if (script_run("wbinfo -i geekotest\@$AD_domain", timeout => 120) != 0);
+    if (is_sle('>=15')) {
+        record_soft_failure("poo#96513 - Failed to get AD domain") if (script_run("getent passwd | grep $AD_domain", timeout => 120) != 0);
+        record_soft_failure("poo#96513 - Failed to get AD username") if (script_run("getent passwd geekotest", timeout => 120) != 0);
+        record_soft_failure("poo#96513 - Failed to get AD groups") if (script_run("getent group openqa", timeout => 120) != 0);
+        record_soft_failure("poo#96513 - Failed to get AD user info for geekotest") if (script_run("getent passwd geekotest\@$AD_domain", timeout => 120) != 0);
+    } else {
+        # Verify users and groups from AD via winbind.
+        # Note: The following checks are subject to sporadic failures (poo#96513)
+        record_soft_failure("poo#96513 - Failed to get AD domain") if (script_run("wbinfo -D $AD_domain", timeout => 120) != 0);
+        record_soft_failure("poo#96513 - Failed to get AD username") if (script_run("wbinfo -u | grep 'geekotest'", timeout => 120) != 0);
+        record_soft_failure("poo#96513 - Failed to get AD groups") if (script_run("wbinfo -g | grep 'openqa'", timeout => 120) != 0);
+        record_soft_failure("poo#96513 Failed to get AD user info for geekotest") if (script_run("wbinfo -i geekotest\@$AD_domain", timeout => 120) != 0);
+    }
 
     # poo#91950 (update password with adcli --add-samba-data option)
     update_password() unless (is_sle("=15") || is_sle("<12-SP4"));    # sle 15 and 12-SP3 do not support the `--add-samba-data` option
