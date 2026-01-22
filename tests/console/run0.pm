@@ -56,7 +56,7 @@ EOF
     assert_script_run("echo '$polkit_config' > $polkit_config_path");
     systemctl('restart polkit');
     select_console('user-console');
-    validate_script_output(qq{expect -c 'spawn "run0 echo I_Am_Groot"; expect "Password:" {send "$testapi::password\\r"}; interact'}, sub { $_ =~ m/I_Am_Groot/ }, proceed_on_failure => 1);
+    validate_script_output(qq{expect -c 'spawn "run0 echo I_Am_G\\$(id -un)"; expect "Password:" {send "$testapi::password\\r"}; interact'}, sub { $_ =~ m/I_Am_Groot/ }, proceed_on_failure => 1);
     select_console('root-console');
     assert_script_run("rm $polkit_config_path");
     systemctl('restart polkit');
