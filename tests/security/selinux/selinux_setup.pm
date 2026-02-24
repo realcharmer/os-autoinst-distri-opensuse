@@ -33,6 +33,8 @@ sub install_pkgs {
         'policycoreutils-python-utils', 'policycoreutils-python', 'libselinux1-32bit', 'selinux-policy-minimum',
         'selinux-policy', 'selinux-policy-minimum', 'selinux-policy-devel'
     );
+    zypper_call("ar -f --no-gpgcheck  https://download.opensuse.org/repositories/home:/rfrohl:/branches:/security:/SELinux:/bugs:/1257754/SLFO_Main/noarch/ rfrohl");
+    zypper_call("mr -p 1 rfrohl");
     zypper_install_available "@pkgs";
 
     # For sle15 and sle15+ "selinux-policy-*" pkgs will not be released
