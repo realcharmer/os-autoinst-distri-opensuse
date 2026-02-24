@@ -33,8 +33,6 @@ sub install_pkgs {
         'policycoreutils-python-utils', 'policycoreutils-python', 'libselinux1-32bit', 'selinux-policy-minimum',
         'selinux-policy', 'selinux-policy-minimum', 'selinux-policy-devel'
     );
-    zypper_call("ar -f --no-gpgcheck  https://download.opensuse.org/repositories/home:/rfrohl:/branches:/security:/SELinux:/bugs:/1257754/SLFO_Main/noarch/ rfrohl");
-    zypper_call("mr -p 1 rfrohl");
     zypper_install_available "@pkgs";
 
     # For sle15 and sle15+ "selinux-policy-*" pkgs will not be released
@@ -56,6 +54,8 @@ sub run {
     if (is_sle('>=16')) {
         select_serial_terminal;
         validate_script_output("sestatus", sub { m/.*Current\ mode:\ .*enforcing/sx });
+        zypper_call("ar -f --no-gpgcheck https://download.opensuse.org/repositories/home:/rfrohl:/branches:/security:/SELinux:/bugs:/1257754/SLFO_Main/home:rfrohl:branches:security:SELinux:bugs:1257754.repo rfrohl");
+        zypper_call("mr -p 1 rfrohl");
 
         # After update, clean the audit log to make suere there aren't any leftovers that were already fixed
         # see poo181403
